@@ -1,0 +1,1198 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>吃药提醒系统</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: -apple-system, 'Microsoft YaHei', 'PingFang SC', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 10px;
+            padding-bottom: 80px; /* 为移动端底部导航留空间 */
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            overflow: hidden;
+            min-height: calc(100vh - 20px);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            text-align: center;
+            flex-shrink: 0;
+        }
+
+        .header h1 {
+            font-size: 1.8em;
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+
+        .header p {
+            font-size: 0.9em;
+            opacity: 0.9;
+        }
+
+        .tabs {
+            display: flex;
+            background: #f5f5f5;
+            border-bottom: 2px solid #ddd;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: none;
+            flex-shrink: 0;
+        }
+
+        .tabs::-webkit-scrollbar {
+            display: none;
+        }
+
+        .tab {
+            flex: 1;
+            min-width: 80px;
+            padding: 15px 10px;
+            text-align: center;
+            cursor: pointer;
+            background: #f5f5f5;
+            border: none;
+            font-size: 0.9em;
+            transition: all 0.3s;
+            white-space: nowrap;
+            touch-action: manipulation;
+            position: relative;
+        }
+
+        .tab:active {
+            background: #e0e0e0;
+            transform: scale(0.98);
+        }
+
+        .tab.active {
+            background: white;
+            color: #667eea;
+            font-weight: bold;
+        }
+
+        .tab.active::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: #667eea;
+        }
+
+        .content {
+            padding: 20px;
+            flex: 1;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #333;
+            font-size: 0.95em;
+        }
+
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 14px;
+            border: 2px solid #ddd;
+            border-radius: 10px;
+            font-size: 16px; /* 防止iOS自动缩放 */
+            transition: all 0.3s;
+            background: white;
+            touch-action: manipulation;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .btn {
+            padding: 14px 24px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            touch-action: manipulation;
+            min-height: 44px; /* 移动端最小触摸目标 */
+            display: inline-block;
+            text-align: center;
+            width: 100%;
+            margin: 5px 0;
+        }
+
+        .btn:active {
+            transform: scale(0.97);
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+        }
+
+        .btn-secondary:hover {
+            box-shadow: 0 5px 15px rgba(108, 117, 125, 0.4);
+        }
+
+        .btn-danger {
+            background: #dc3545;
+        }
+
+        .btn-danger:hover {
+            box-shadow: 0 5px 15px rgba(220, 53, 69, 0.4);
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            width: 100%;
+        }
+
+        .btn-group .btn {
+            flex: 1;
+            min-width: 120px;
+        }
+
+        .camera-container {
+            margin: 20px 0;
+            text-align: center;
+        }
+
+        #video {
+            width: 100%;
+            max-width: 100%;
+            height: auto;
+            max-height: 400px;
+            border-radius: 10px;
+            background: #000;
+            display: none;
+            object-fit: contain;
+        }
+
+        #canvas {
+            display: none;
+        }
+
+        .photo-preview {
+            width: 100%;
+            max-width: 100%;
+            border-radius: 10px;
+            margin: 15px 0;
+            display: none;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+
+        .medicine-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .medicine-card {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 18px;
+            border: 2px solid #e0e0e0;
+            transition: all 0.3s;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .medicine-card:active {
+            transform: scale(0.98);
+        }
+
+        .medicine-card:hover {
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            transform: translateY(-2px);
+            border-color: #667eea;
+        }
+
+        .medicine-card h3 {
+            color: #667eea;
+            margin-bottom: 12px;
+            font-size: 1.2em;
+            word-break: break-word;
+        }
+
+        .medicine-card img {
+            width: 100%;
+            max-height: 200px;
+            object-fit: cover;
+            border-radius: 8px;
+            margin: 12px 0;
+        }
+
+        .medicine-card .info {
+            margin: 12px 0;
+            color: #666;
+            font-size: 0.9em;
+            flex: 1;
+        }
+
+        .medicine-card .info p {
+            margin: 8px 0;
+            line-height: 1.5;
+        }
+
+        .medicine-card .actions {
+            margin-top: 15px;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .medicine-card .actions .btn {
+            flex: 1;
+            min-width: 100px;
+            margin: 0;
+            font-size: 0.9em;
+            padding: 12px 16px;
+        }
+
+        .record-list {
+            margin-top: 20px;
+        }
+
+        .record-item {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 18px;
+            margin-bottom: 15px;
+            border-left: 4px solid #667eea;
+            transition: all 0.3s;
+        }
+
+        .record-item:active {
+            transform: scale(0.98);
+        }
+
+        .record-item h4 {
+            color: #667eea;
+            margin-bottom: 10px;
+            font-size: 1.1em;
+            word-break: break-word;
+        }
+
+        .record-item img {
+            max-width: 100%;
+            width: 100%;
+            border-radius: 8px;
+            margin: 12px 0;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .record-item .time {
+            color: #666;
+            font-size: 0.9em;
+            margin: 8px 0;
+        }
+
+        .record-item p {
+            margin: 8px 0;
+            line-height: 1.5;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: #999;
+        }
+
+        .empty-state svg {
+            width: 80px;
+            height: 80px;
+            margin-bottom: 20px;
+            opacity: 0.3;
+        }
+
+        .empty-state p {
+            font-size: 1em;
+        }
+
+        .reminder-badge {
+            display: inline-block;
+            background: #ff6b6b;
+            color: white;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 0.75em;
+            margin-left: 8px;
+            font-weight: 600;
+        }
+
+        .notification-permission {
+            background: #fff3cd;
+            border: 2px solid #ffc107;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .notification-permission p {
+            margin-bottom: 12px;
+            color: #856404;
+        }
+
+        /* 移动端优化 */
+        @media (max-width: 768px) {
+            body {
+                padding: 5px;
+                padding-bottom: 70px;
+            }
+
+            .container {
+                border-radius: 15px;
+                min-height: calc(100vh - 10px);
+            }
+
+            .header {
+                padding: 15px;
+            }
+
+            .header h1 {
+                font-size: 1.5em;
+            }
+
+            .header p {
+                font-size: 0.85em;
+            }
+
+            .content {
+                padding: 15px;
+            }
+
+            .tab {
+                padding: 12px 8px;
+                font-size: 0.85em;
+            }
+
+            .medicine-list {
+                grid-template-columns: 1fr;
+                gap: 12px;
+            }
+
+            .medicine-card {
+                padding: 15px;
+            }
+
+            .medicine-card .actions {
+                flex-direction: column;
+            }
+
+            .medicine-card .actions .btn {
+                width: 100%;
+            }
+
+            .record-item {
+                padding: 15px;
+            }
+
+            .form-group input,
+            .form-group select {
+                padding: 12px;
+            }
+
+            .btn {
+                padding: 12px 20px;
+                font-size: 0.95em;
+            }
+
+            .btn-group {
+                flex-direction: column;
+            }
+
+            .btn-group .btn {
+                width: 100%;
+                min-width: auto;
+            }
+
+            .camera-container {
+                margin: 15px 0;
+            }
+
+            #video {
+                max-height: 300px;
+            }
+        }
+
+        /* 小屏幕手机优化 */
+        @media (max-width: 480px) {
+            .header h1 {
+                font-size: 1.3em;
+            }
+
+            .tab {
+                padding: 10px 6px;
+                font-size: 0.8em;
+                min-width: 70px;
+            }
+
+            .content {
+                padding: 12px;
+            }
+
+            .medicine-card h3 {
+                font-size: 1.1em;
+            }
+
+            .record-item h4 {
+                font-size: 1em;
+            }
+        }
+
+        /* 桌面端优化 */
+        @media (min-width: 769px) {
+            body {
+                padding: 20px;
+                padding-bottom: 20px;
+            }
+
+            .header {
+                padding: 30px;
+            }
+
+            .header h1 {
+                font-size: 2.2em;
+            }
+
+            .content {
+                padding: 30px;
+            }
+
+            .tab {
+                padding: 18px 15px;
+                font-size: 1em;
+            }
+
+            .medicine-list {
+                grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+                gap: 20px;
+            }
+
+            .btn-group .btn {
+                width: auto;
+            }
+
+            .medicine-card .actions .btn {
+                width: auto;
+            }
+        }
+
+        /* 大屏幕优化 */
+        @media (min-width: 1200px) {
+            .medicine-list {
+                grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            }
+        }
+
+        /* 横屏优化 */
+        @media (max-width: 768px) and (orientation: landscape) {
+            .header {
+                padding: 12px;
+            }
+
+            .header h1 {
+                font-size: 1.3em;
+                margin-bottom: 5px;
+            }
+
+            .tab {
+                padding: 10px 8px;
+            }
+
+            .content {
+                padding: 15px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>💊 吃药提醒系统</h1>
+            <p>记录您的用药情况，按时提醒</p>
+        </div>
+
+        <div class="tabs">
+            <button class="tab active" onclick="switchTab('add', this)">添加药物</button>
+            <button class="tab" onclick="switchTab('list', this)">我的药物</button>
+            <button class="tab" onclick="switchTab('records', this)">用药记录</button>
+            <button class="tab" onclick="switchTab('reminders', this)">提醒设置</button>
+        </div>
+
+        <div class="content">
+            <!-- 添加药物 -->
+            <div id="add" class="tab-content active">
+                <div class="notification-permission" id="notificationPermission" style="display: none;">
+                    <p>为了接收提醒通知，请允许浏览器发送通知</p>
+                    <button class="btn" onclick="requestNotificationPermission()">允许通知</button>
+                </div>
+
+                <form id="medicineForm">
+                    <div class="form-group">
+                        <label>药物名称 *</label>
+                        <input type="text" id="medicineName" required placeholder="例如：阿司匹林">
+                    </div>
+
+                    <div class="form-group">
+                        <label>药物照片</label>
+                        <div class="camera-container">
+                            <video id="video" autoplay playsinline></video>
+                            <canvas id="canvas"></canvas>
+                            <img id="photoPreview" class="photo-preview" alt="药物照片">
+                            <div class="btn-group">
+                                <button type="button" class="btn" onclick="startCamera()">📷 打开摄像头</button>
+                                <button type="button" class="btn btn-secondary" onclick="capturePhoto()" id="captureBtn" style="display: none;">📸 拍照</button>
+                                <button type="button" class="btn btn-secondary" onclick="stopCamera()" id="stopBtn" style="display: none;">停止</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>每日服用次数 *</label>
+                        <select id="timesPerDay" required>
+                            <option value="1">1次</option>
+                            <option value="2">2次</option>
+                            <option value="3">3次</option>
+                            <option value="4">4次</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>每次服用剂量 *</label>
+                        <input type="text" id="dosage" required placeholder="例如：1片、5ml">
+                    </div>
+
+                    <div class="form-group">
+                        <label>提醒时间 *</label>
+                        <div id="reminderTimes"></div>
+                        <button type="button" class="btn btn-secondary" onclick="addReminderTime()" style="margin-top: 10px; width: 100%;">+ 添加提醒时间</button>
+                    </div>
+
+                    <div class="form-group">
+                        <label>备注</label>
+                        <input type="text" id="notes" placeholder="例如：饭后服用">
+                    </div>
+
+                    <button type="submit" class="btn">保存药物</button>
+                </form>
+            </div>
+
+            <!-- 我的药物列表 -->
+            <div id="list" class="tab-content">
+                <div id="medicineList" class="medicine-list">
+                    <div class="empty-state">
+                        <p>暂无药物记录</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 用药记录 -->
+            <div id="records" class="tab-content">
+                <div id="recordList" class="record-list">
+                    <div class="empty-state">
+                        <p>暂无用药记录</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 提醒设置 -->
+            <div id="reminders" class="tab-content">
+                <h2>提醒设置</h2>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="enableNotifications" onchange="toggleNotifications()">
+                        启用浏览器通知
+                    </label>
+                </div>
+                <div class="form-group">
+                    <label>提醒提前时间（分钟）</label>
+                    <input type="number" id="reminderAdvance" min="0" value="5" onchange="saveReminderSettings()">
+                </div>
+                <div id="upcomingReminders"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 数据库初始化
+        let db;
+        const DB_NAME = 'MedicineReminderDB';
+        const DB_VERSION = 1;
+
+        // 初始化数据库
+        function initDB() {
+            return new Promise((resolve, reject) => {
+                const request = indexedDB.open(DB_NAME, DB_VERSION);
+
+                request.onerror = () => reject(request.error);
+                request.onsuccess = () => {
+                    db = request.result;
+                    resolve(db);
+                };
+
+                request.onupgradeneeded = (event) => {
+                    db = event.target.result;
+
+                    // 药物表
+                    if (!db.objectStoreNames.contains('medicines')) {
+                        const medicineStore = db.createObjectStore('medicines', { keyPath: 'id', autoIncrement: true });
+                        medicineStore.createIndex('name', 'name', { unique: false });
+                    }
+
+                    // 用药记录表
+                    if (!db.objectStoreNames.contains('records')) {
+                        const recordStore = db.createObjectStore('records', { keyPath: 'id', autoIncrement: true });
+                        recordStore.createIndex('medicineId', 'medicineId', { unique: false });
+                        recordStore.createIndex('timestamp', 'timestamp', { unique: false });
+                    }
+
+                    // 设置表
+                    if (!db.objectStoreNames.contains('settings')) {
+                        db.createObjectStore('settings', { keyPath: 'key' });
+                    }
+                };
+            });
+        }
+
+        // 切换标签页
+        function switchTab(tabName, element) {
+            document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+            
+            if (element) {
+                element.classList.add('active');
+            } else {
+                // 如果没有传入element，通过tabName找到对应的tab
+                document.querySelectorAll('.tab').forEach(tab => {
+                    if (tab.textContent.includes(getTabText(tabName))) {
+                        tab.classList.add('active');
+                    }
+                });
+            }
+            document.getElementById(tabName).classList.add('active');
+
+            if (tabName === 'list') {
+                loadMedicines();
+            } else if (tabName === 'records') {
+                loadRecords();
+            } else if (tabName === 'reminders') {
+                loadUpcomingReminders();
+            }
+        }
+
+        function getTabText(tabName) {
+            const map = {
+                'add': '添加药物',
+                'list': '我的药物',
+                'records': '用药记录',
+                'reminders': '提醒设置'
+            };
+            return map[tabName] || '';
+        }
+
+        // 摄像头相关
+        let stream = null;
+        let capturedPhoto = null;
+
+        function startCamera() {
+            // 移动端优先使用后置摄像头
+            const constraints = {
+                video: {
+                    facingMode: { ideal: 'environment' }, // 后置摄像头
+                    width: { ideal: 1280 },
+                    height: { ideal: 720 }
+                }
+            };
+
+            navigator.mediaDevices.getUserMedia(constraints)
+                .then(mediaStream => {
+                    stream = mediaStream;
+                    const video = document.getElementById('video');
+                    video.srcObject = mediaStream;
+                    video.style.display = 'block';
+                    document.getElementById('captureBtn').style.display = 'inline-block';
+                    document.getElementById('stopBtn').style.display = 'inline-block';
+                    
+                    // 视频加载后播放
+                    video.onloadedmetadata = () => {
+                        video.play().catch(err => console.log('播放视频失败:', err));
+                    };
+                })
+                .catch(err => {
+                    // 如果后置摄像头失败，尝试前置摄像头
+                    if (err.name === 'NotReadableError' || err.name === 'NotFoundError') {
+                        navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } })
+                            .then(mediaStream => {
+                                stream = mediaStream;
+                                const video = document.getElementById('video');
+                                video.srcObject = mediaStream;
+                                video.style.display = 'block';
+                                document.getElementById('captureBtn').style.display = 'inline-block';
+                                document.getElementById('stopBtn').style.display = 'inline-block';
+                                video.onloadedmetadata = () => {
+                                    video.play().catch(e => console.log('播放视频失败:', e));
+                                };
+                            })
+                            .catch(e => {
+                                alert('无法访问摄像头: ' + e.message);
+                            });
+                    } else {
+                        alert('无法访问摄像头: ' + err.message);
+                    }
+                });
+        }
+
+        function capturePhoto() {
+            const video = document.getElementById('video');
+            const canvas = document.getElementById('canvas');
+            const preview = document.getElementById('photoPreview');
+            
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            canvas.getContext('2d').drawImage(video, 0, 0);
+            
+            capturedPhoto = canvas.toDataURL('image/png');
+            preview.src = capturedPhoto;
+            preview.style.display = 'block';
+        }
+
+        function stopCamera() {
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+                stream = null;
+            }
+            document.getElementById('video').style.display = 'none';
+            document.getElementById('captureBtn').style.display = 'none';
+            document.getElementById('stopBtn').style.display = 'none';
+        }
+
+        // 提醒时间管理
+        let reminderTimeCount = 0;
+
+        function addReminderTime() {
+            reminderTimeCount++;
+            const container = document.getElementById('reminderTimes');
+            const div = document.createElement('div');
+            div.className = 'form-group';
+            div.style.marginBottom = '10px';
+            div.style.display = 'flex';
+            div.style.gap = '10px';
+            div.style.alignItems = 'center';
+            div.innerHTML = `
+                <input type="time" id="reminderTime${reminderTimeCount}" required style="flex: 1; padding: 12px; border: 2px solid #ddd; border-radius: 8px; font-size: 16px;">
+                <button type="button" class="btn btn-danger" onclick="this.parentElement.remove()" style="width: auto; min-width: 80px; margin: 0; padding: 12px 16px;">删除</button>
+            `;
+            container.appendChild(div);
+        }
+
+        // 保存药物
+        document.getElementById('medicineForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const reminderTimes = [];
+            document.querySelectorAll('[id^="reminderTime"]').forEach(input => {
+                if (input.value) {
+                    reminderTimes.push(input.value);
+                }
+            });
+
+            if (reminderTimes.length === 0) {
+                alert('请至少添加一个提醒时间');
+                return;
+            }
+
+            const medicine = {
+                name: document.getElementById('medicineName').value,
+                photo: capturedPhoto || null,
+                timesPerDay: parseInt(document.getElementById('timesPerDay').value),
+                dosage: document.getElementById('dosage').value,
+                reminderTimes: reminderTimes,
+                notes: document.getElementById('notes').value,
+                createdAt: new Date().toISOString()
+            };
+
+            try {
+                const transaction = db.transaction(['medicines'], 'readwrite');
+                const store = transaction.objectStore('medicines');
+                await store.add(medicine);
+                
+                alert('药物保存成功！');
+                document.getElementById('medicineForm').reset();
+                document.getElementById('photoPreview').style.display = 'none';
+                capturedPhoto = null;
+                document.getElementById('reminderTimes').innerHTML = '';
+                reminderTimeCount = 0;
+                stopCamera();
+                
+                // 设置提醒
+                setupReminders();
+            } catch (error) {
+                alert('保存失败: ' + error.message);
+            }
+        });
+
+        // 加载药物列表
+        async function loadMedicines() {
+            try {
+                const transaction = db.transaction(['medicines'], 'readonly');
+                const store = transaction.objectStore('medicines');
+                const request = store.getAll();
+                
+                request.onsuccess = () => {
+                    const medicines = request.result;
+                    const container = document.getElementById('medicineList');
+                    
+                    if (medicines.length === 0) {
+                        container.innerHTML = '<div class="empty-state"><p>暂无药物记录</p></div>';
+                        return;
+                    }
+
+                    container.innerHTML = medicines.map(medicine => `
+                        <div class="medicine-card">
+                            <h3>${medicine.name} <span class="reminder-badge">${medicine.timesPerDay}次/天</span></h3>
+                            ${medicine.photo ? `<img src="${medicine.photo}" alt="${medicine.name}">` : ''}
+                            <div class="info">
+                                <p><strong>剂量:</strong> ${medicine.dosage}</p>
+                                <p><strong>提醒时间:</strong> ${medicine.reminderTimes.join(', ')}</p>
+                                ${medicine.notes ? `<p><strong>备注:</strong> ${medicine.notes}</p>` : ''}
+                            </div>
+                            <div class="actions">
+                                <button class="btn" onclick="recordMedicine(${medicine.id})">✅ 记录已服用</button>
+                                <button class="btn btn-danger" onclick="deleteMedicine(${medicine.id})">删除</button>
+                            </div>
+                        </div>
+                    `).join('');
+                };
+            } catch (error) {
+                console.error('加载药物失败:', error);
+            }
+        }
+
+        // 记录用药
+        async function recordMedicine(medicineId) {
+            try {
+                const transaction = db.transaction(['medicines'], 'readonly');
+                const store = transaction.objectStore('medicines');
+                const medicine = await new Promise((resolve, reject) => {
+                    const request = store.get(medicineId);
+                    request.onsuccess = () => resolve(request.result);
+                    request.onerror = () => reject(request.error);
+                });
+
+                if (!medicine) {
+                    alert('药物不存在');
+                    return;
+                }
+
+                const record = {
+                    medicineId: medicineId,
+                    medicineName: medicine.name,
+                    photo: medicine.photo,
+                    timestamp: new Date().toISOString(),
+                    dosage: medicine.dosage
+                };
+
+                const recordTransaction = db.transaction(['records'], 'readwrite');
+                const recordStore = recordTransaction.objectStore('records');
+                await recordStore.add(record);
+
+                alert('用药记录已保存！');
+                loadRecords();
+            } catch (error) {
+                alert('记录失败: ' + error.message);
+            }
+        }
+
+        // 删除药物
+        async function deleteMedicine(medicineId) {
+            if (!confirm('确定要删除这个药物吗？')) return;
+
+            try {
+                const transaction = db.transaction(['medicines'], 'readwrite');
+                const store = transaction.objectStore('medicines');
+                await store.delete(medicineId);
+                
+                alert('删除成功！');
+                loadMedicines();
+                setupReminders();
+            } catch (error) {
+                alert('删除失败: ' + error.message);
+            }
+        }
+
+        // 加载用药记录
+        async function loadRecords() {
+            try {
+                const transaction = db.transaction(['records'], 'readonly');
+                const store = transaction.objectStore('records');
+                const index = store.index('timestamp');
+                const request = index.openCursor(null, 'prev'); // 倒序
+                
+                const records = [];
+                request.onsuccess = (e) => {
+                    const cursor = e.target.result;
+                    if (cursor) {
+                        records.push(cursor.value);
+                        cursor.continue();
+                    } else {
+                        displayRecords(records);
+                    }
+                };
+            } catch (error) {
+                console.error('加载记录失败:', error);
+            }
+        }
+
+        function displayRecords(records) {
+            const container = document.getElementById('recordList');
+            
+            if (records.length === 0) {
+                container.innerHTML = '<div class="empty-state"><p>暂无用药记录</p></div>';
+                return;
+            }
+
+            container.innerHTML = records.map(record => {
+                const date = new Date(record.timestamp);
+                return `
+                    <div class="record-item">
+                        <h4>${record.medicineName}</h4>
+                        <p class="time">${date.toLocaleString('zh-CN')}</p>
+                        <p><strong>剂量:</strong> ${record.dosage}</p>
+                        ${record.photo ? `<img src="${record.photo}" alt="${record.medicineName}">` : ''}
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // 通知权限
+        function requestNotificationPermission() {
+            if ('Notification' in window) {
+                Notification.requestPermission().then(permission => {
+                    if (permission === 'granted') {
+                        document.getElementById('notificationPermission').style.display = 'none';
+                        saveSetting('notificationsEnabled', true);
+                        setupReminders();
+                    }
+                });
+            }
+        }
+
+        // 保存设置
+        async function saveSetting(key, value) {
+            try {
+                const transaction = db.transaction(['settings'], 'readwrite');
+                const store = transaction.objectStore('settings');
+                await store.put({ key, value });
+            } catch (error) {
+                console.error('保存设置失败:', error);
+            }
+        }
+
+        // 获取设置
+        async function getSetting(key, defaultValue) {
+            try {
+                const transaction = db.transaction(['settings'], 'readonly');
+                const store = transaction.objectStore('settings');
+                const request = store.get(key);
+                return new Promise((resolve) => {
+                    request.onsuccess = () => {
+                        resolve(request.result ? request.result.value : defaultValue);
+                    };
+                    request.onerror = () => resolve(defaultValue);
+                });
+            } catch (error) {
+                return defaultValue;
+            }
+        }
+
+        // 提醒功能
+        let reminderIntervals = [];
+
+        async function setupReminders() {
+            // 清除现有提醒
+            reminderIntervals.forEach(interval => clearInterval(interval));
+            reminderIntervals = [];
+
+            const notificationsEnabled = await getSetting('notificationsEnabled', false);
+            if (!notificationsEnabled) {
+                if (Notification.permission === 'default') {
+                    document.getElementById('notificationPermission').style.display = 'block';
+                }
+                return;
+            }
+
+            try {
+                const transaction = db.transaction(['medicines'], 'readonly');
+                const store = transaction.objectStore('medicines');
+                const request = store.getAll();
+                
+                request.onsuccess = () => {
+                    const medicines = request.result;
+                    medicines.forEach(medicine => {
+                        medicine.reminderTimes.forEach(time => {
+                            const [hours, minutes] = time.split(':').map(Number);
+                            const interval = setInterval(() => {
+                                const now = new Date();
+                                if (now.getHours() === hours && now.getMinutes() === minutes) {
+                                    showReminder(medicine);
+                                }
+                            }, 60000); // 每分钟检查一次
+                            reminderIntervals.push(interval);
+                        });
+                    });
+                };
+            } catch (error) {
+                console.error('设置提醒失败:', error);
+            }
+        }
+
+        function showReminder(medicine) {
+            if ('Notification' in window && Notification.permission === 'granted') {
+                new Notification(`💊 吃药提醒: ${medicine.name}`, {
+                    body: `该吃 ${medicine.dosage} 了${medicine.notes ? ' (' + medicine.notes + ')' : ''}`,
+                    icon: medicine.photo || undefined,
+                    tag: `medicine-${medicine.id}-${Date.now()}`
+                });
+            }
+        }
+
+        function toggleNotifications() {
+            const enabled = document.getElementById('enableNotifications').checked;
+            saveSetting('notificationsEnabled', enabled);
+            if (enabled) {
+                requestNotificationPermission();
+            }
+        }
+
+        function saveReminderSettings() {
+            const advance = parseInt(document.getElementById('reminderAdvance').value);
+            saveSetting('reminderAdvance', advance);
+        }
+
+        async function loadUpcomingReminders() {
+            const enabled = await getSetting('notificationsEnabled', false);
+            document.getElementById('enableNotifications').checked = enabled;
+            
+            const advance = await getSetting('reminderAdvance', 5);
+            document.getElementById('reminderAdvance').value = advance;
+
+            try {
+                const transaction = db.transaction(['medicines'], 'readonly');
+                const store = transaction.objectStore('medicines');
+                const request = store.getAll();
+                
+                request.onsuccess = () => {
+                    const medicines = request.result;
+                    const container = document.getElementById('upcomingReminders');
+                    
+                    if (medicines.length === 0) {
+                        container.innerHTML = '<p>暂无提醒设置</p>';
+                        return;
+                    }
+
+                    const now = new Date();
+                    const upcoming = [];
+                    
+                    medicines.forEach(medicine => {
+                        medicine.reminderTimes.forEach(time => {
+                            const [hours, minutes] = time.split(':').map(Number);
+                            const reminderTime = new Date();
+                            reminderTime.setHours(hours, minutes, 0, 0);
+                            
+                            if (reminderTime < now) {
+                                reminderTime.setDate(reminderTime.getDate() + 1);
+                            }
+                            
+                            upcoming.push({
+                                medicine: medicine.name,
+                                time: reminderTime,
+                                dosage: medicine.dosage
+                            });
+                        });
+                    });
+
+                    upcoming.sort((a, b) => a.time - b.time);
+
+                    container.innerHTML = '<h3 style="margin-top: 20px;">即将到来的提醒</h3>' +
+                        upcoming.slice(0, 10).map(item => `
+                            <div class="record-item">
+                                <h4>${item.medicine}</h4>
+                                <p><strong>时间:</strong> ${item.time.toLocaleString('zh-CN')}</p>
+                                <p><strong>剂量:</strong> ${item.dosage}</p>
+                            </div>
+                        `).join('');
+                };
+            } catch (error) {
+                console.error('加载提醒失败:', error);
+            }
+        }
+
+        // 初始化
+        window.addEventListener('load', async () => {
+            await initDB();
+            await loadMedicines();
+            await setupReminders();
+            
+            // 检查通知权限
+            if ('Notification' in window && Notification.permission === 'default') {
+                document.getElementById('notificationPermission').style.display = 'block';
+            }
+        });
+    </script>
+</body>
+</html>

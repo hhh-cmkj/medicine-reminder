@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#667eea">
     <title>吃药提醒系统</title>
     <style>
         * {
@@ -218,6 +220,17 @@
             background: #000;
             display: none;
             object-fit: contain;
+            cursor: pointer;
+            opacity: 1;
+            transform: scale(1);
+        }
+
+        #video.playing {
+            opacity: 1;
+        }
+
+        #video.paused {
+            opacity: 0.8;
         }
 
         #canvas {
@@ -558,6 +571,22 @@
                 padding: 15px;
             }
         }
+
+        /* 提醒弹窗动画 */
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateX(-50%) translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(-50%) translateY(0);
+            }
+        }
+
+        #pageReminder {
+            animation: slideDown 0.3s ease-out;
+        }
     </style>
 </head>
 <body>
@@ -578,8 +607,12 @@
             <!-- 添加药物 -->
             <div id="add" class="tab-content active">
                 <div class="notification-permission" id="notificationPermission" style="display: none;">
-                    <p>为了接收提醒通知，请允许浏览器发送通知</p>
-                    <button class="btn" onclick="requestNotificationPermission()">允许通知</button>
+                    <p><strong>📱 启用提醒功能</strong></p>
+                    <p style="font-size: 0.9em; margin-top: 8px;">为了接收吃药提醒，请允许浏览器发送通知</p>
+                    <p id="iosHint" style="font-size: 0.85em; margin-top: 8px; color: #856404; display: none;">
+                        💡 iOS提示：iOS 16.4+支持后台通知。如果您的系统版本较低，请保持页面打开以获得提醒。
+                    </p>
+                    <button class="btn" onclick="requestNotificationPermission()" style="margin-top: 12px;">允许通知</button>
                 </div>
 
                 <form id="medicineForm">
@@ -591,9 +624,12 @@
                     <div class="form-group">
                         <label>药物照片</label>
                         <div class="camera-container">
-                            <video id="video" autoplay playsinline></video>
+                            <video id="video" autoplay playsinline webkit-playsinline muted style="display: none;"></video>
                             <canvas id="canvas"></canvas>
                             <img id="photoPreview" class="photo-preview" alt="药物照片">
+                            <p id="videoHint" style="display: none; font-size: 0.85em; color: #666; margin: 10px 0;">
+                                💡 如果视频显示为黑色，请点击视频区域开始预览
+                            </p>
                             <div class="btn-group">
                                 <button type="button" class="btn" onclick="startCamera()">📷 打开摄像头</button>
                                 <button type="button" class="btn btn-secondary" onclick="capturePhoto()" id="captureBtn" style="display: none;">📸 拍照</button>
@@ -750,46 +786,162 @@
         let capturedPhoto = null;
 
         function startCamera() {
+            const video = document.getElementById('video');
+            
+            // 移动端特殊处理：确保视频元素属性正确
+            video.setAttribute('playsinline', 'true');
+            video.setAttribute('webkit-playsinline', 'true');
+            video.muted = true; // 移动端要求自动播放需要静音
+            video.playsInline = true;
+            
+            // Android特殊优化
+            if (isAndroid) {
+                // Android通常对摄像头支持更好，可以设置更高的分辨率
+                video.setAttribute('autoplay', 'true');
+            }
+            
+            // 添加点击事件来触发播放（iOS可能需要用户交互）
+            const handleVideoClick = () => {
+                if (video.paused && stream) {
+                    video.play()
+                        .then(() => {
+                            const hint = document.getElementById('videoHint');
+                            if (hint) {
+                                hint.style.display = 'none';
+                            }
+                        })
+                        .catch(err => {
+                            console.log('点击播放失败:', err);
+                        });
+                }
+            };
+            video.addEventListener('click', handleVideoClick);
+            
+            // 监听播放状态
+            video.addEventListener('play', () => {
+                video.classList.add('playing');
+                video.classList.remove('paused');
+                const hint = document.getElementById('videoHint');
+                if (hint) {
+                    hint.style.display = 'none';
+                }
+            });
+            
+            video.addEventListener('pause', () => {
+                video.classList.add('paused');
+                video.classList.remove('playing');
+            });
+            
             // 移动端优先使用后置摄像头
             const constraints = {
                 video: {
                     facingMode: { ideal: 'environment' }, // 后置摄像头
-                    width: { ideal: 1280 },
-                    height: { ideal: 720 }
+                    // Android可以支持更高分辨率
+                    width: { ideal: isAndroid ? 1920 : 1280 },
+                    height: { ideal: isAndroid ? 1080 : 720 }
                 }
             };
 
             navigator.mediaDevices.getUserMedia(constraints)
                 .then(mediaStream => {
                     stream = mediaStream;
-                    const video = document.getElementById('video');
                     video.srcObject = mediaStream;
-                    video.style.display = 'block';
-                    document.getElementById('captureBtn').style.display = 'inline-block';
-                    document.getElementById('stopBtn').style.display = 'inline-block';
                     
-                    // 视频加载后播放
-                    video.onloadedmetadata = () => {
-                        video.play().catch(err => console.log('播放视频失败:', err));
+                    // iOS需要等待loadedmetadata事件
+                    const handleLoadedMetadata = () => {
+                        video.style.display = 'block';
+                        document.getElementById('captureBtn').style.display = 'inline-block';
+                        document.getElementById('stopBtn').style.display = 'inline-block';
+                        
+                        // 尝试自动播放
+                        const playPromise = video.play();
+                        if (playPromise !== undefined) {
+                            playPromise
+                                .then(() => {
+                                    console.log('视频自动播放成功');
+                                    video.classList.add('playing');
+                                })
+                                .catch(err => {
+                                    console.log('自动播放失败，等待用户交互:', err);
+                                    // iOS可能需要用户交互才能播放
+                                    // 显示提示或等待用户点击
+                                    video.classList.add('paused');
+                                    const hint = document.getElementById('videoHint');
+                                    // iOS和部分Android设备可能需要用户交互
+                                    if (hint && (isIOS || isAndroid)) {
+                                        hint.style.display = 'block';
+                                    }
+                                });
+                        }
                     };
+                    
+                    // 使用多个事件确保触发
+                    const tryPlay = () => {
+                        if (video.readyState >= 1 && video.videoWidth > 0) {
+                            handleLoadedMetadata();
+                        }
+                    };
+                    
+                    video.addEventListener('loadedmetadata', tryPlay, { once: true });
+                    video.addEventListener('loadeddata', tryPlay, { once: true });
+                    video.addEventListener('canplay', tryPlay, { once: true });
+                    
+                    // 如果已经准备好，立即执行
+                    setTimeout(() => {
+                        if (video.readyState >= 1 && video.videoWidth > 0 && video.style.display === 'none') {
+                            handleLoadedMetadata();
+                        }
+                    }, isAndroid ? 200 : 100); // Android可能需要稍长的等待时间
                 })
                 .catch(err => {
                     // 如果后置摄像头失败，尝试前置摄像头
-                    if (err.name === 'NotReadableError' || err.name === 'NotFoundError') {
+                    if (err.name === 'NotReadableError' || err.name === 'NotFoundError' || err.name === 'NotAllowedError') {
+                        // Android可能因为权限问题失败，也尝试前置摄像头
                         navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } })
                             .then(mediaStream => {
                                 stream = mediaStream;
-                                const video = document.getElementById('video');
                                 video.srcObject = mediaStream;
-                                video.style.display = 'block';
-                                document.getElementById('captureBtn').style.display = 'inline-block';
-                                document.getElementById('stopBtn').style.display = 'inline-block';
-                                video.onloadedmetadata = () => {
-                                    video.play().catch(e => console.log('播放视频失败:', e));
+                                
+                                const handleLoadedMetadata = () => {
+                                    video.style.display = 'block';
+                                    document.getElementById('captureBtn').style.display = 'inline-block';
+                                    document.getElementById('stopBtn').style.display = 'inline-block';
+                                    
+                                    const playPromise = video.play();
+                                    if (playPromise !== undefined) {
+                                        playPromise
+                                            .then(() => {
+                                                console.log('视频播放成功');
+                                                video.classList.add('playing');
+                                            })
+                                            .catch(e => {
+                                                console.log('播放失败，等待用户交互:', e);
+                                                video.classList.add('paused');
+                                            });
+                                    }
                                 };
+                                
+                                const tryPlay = () => {
+                                    if (video.readyState >= 1 && video.videoWidth > 0) {
+                                        handleLoadedMetadata();
+                                    }
+                                };
+                                
+                                video.addEventListener('loadedmetadata', tryPlay, { once: true });
+                                video.addEventListener('loadeddata', tryPlay, { once: true });
+                                video.addEventListener('canplay', tryPlay, { once: true });
+                                
+                                setTimeout(() => {
+                                    if (video.readyState >= 1 && video.videoWidth > 0 && video.style.display === 'none') {
+                                        handleLoadedMetadata();
+                                    }
+                                }, isAndroid ? 200 : 100); // Android可能需要稍长的等待时间
                             })
                             .catch(e => {
-                                alert('无法访问摄像头: ' + e.message);
+                                const errorMsg = isAndroid ? 
+                                    '无法访问摄像头。请检查：\n1. 是否授予了摄像头权限\n2. 是否有其他应用正在使用摄像头\n3. 浏览器是否支持摄像头功能' :
+                                    '无法访问摄像头: ' + e.message;
+                                alert(errorMsg);
                             });
                     } else {
                         alert('无法访问摄像头: ' + err.message);
@@ -812,13 +964,22 @@
         }
 
         function stopCamera() {
+            const video = document.getElementById('video');
             if (stream) {
                 stream.getTracks().forEach(track => track.stop());
                 stream = null;
             }
-            document.getElementById('video').style.display = 'none';
+            if (video.srcObject) {
+                video.srcObject = null;
+            }
+            video.style.display = 'none';
+            video.classList.remove('playing', 'paused');
             document.getElementById('captureBtn').style.display = 'none';
             document.getElementById('stopBtn').style.display = 'none';
+            const hint = document.getElementById('videoHint');
+            if (hint) {
+                hint.style.display = 'none';
+            }
         }
 
         // 提醒时间管理
@@ -1020,15 +1181,36 @@
         }
 
         // 通知权限
-        function requestNotificationPermission() {
+        async function requestNotificationPermission() {
             if ('Notification' in window) {
-                Notification.requestPermission().then(permission => {
+                try {
+                    const permission = await Notification.requestPermission();
                     if (permission === 'granted') {
                         document.getElementById('notificationPermission').style.display = 'none';
-                        saveSetting('notificationsEnabled', true);
-                        setupReminders();
+                        await saveSetting('notificationsEnabled', true);
+                        
+                        // 设备特定提示
+                        if (isIOS) {
+                            alert('✅ 通知权限已授予！\n\n提示：\n- iOS 16.4+ 支持后台通知\n- 请保持页面在后台运行\n- 或将此页面添加到主屏幕以获得更好的体验');
+                        } else if (isAndroid) {
+                            alert('✅ 通知权限已授予！\n\nAndroid设备支持完整的后台通知功能，即使应用在后台也能收到提醒。');
+                        }
+                        
+                        // 注册Service Worker以支持后台通知
+                        await registerServiceWorker();
+                        await setupReminders();
+                    } else if (permission === 'denied') {
+                        const deviceHint = isAndroid ? 
+                            '请在浏览器设置 > 网站设置 > 通知中允许通知权限。' : 
+                            '请在浏览器设置中允许通知权限。';
+                        alert('通知权限被拒绝。' + deviceHint);
                     }
-                });
+                } catch (error) {
+                    console.error('请求通知权限失败:', error);
+                    alert('请求通知权限失败: ' + error.message);
+                }
+            } else {
+                alert('您的浏览器不支持通知功能。');
             }
         }
 
@@ -1062,6 +1244,73 @@
 
         // 提醒功能
         let reminderIntervals = [];
+        let originalTitle = document.title;
+        let titleBlinkInterval = null;
+        let isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+        let isAndroid = /Android/.test(navigator.userAgent);
+        let lastReminderTimes = {}; // 记录上次提醒的时间，防止重复
+
+        // 注册Service Worker（用于iOS 16.4+和Android后台通知）
+        async function registerServiceWorker() {
+            if ('serviceWorker' in navigator) {
+                try {
+                    // 创建Service Worker代码
+                    const swCode = `
+                        self.addEventListener('message', (event) => {
+                            if (event.data && event.data.type === 'SHOW_NOTIFICATION') {
+                                const { title, body, icon, tag } = event.data;
+                                const options = {
+                                    body: body,
+                                    tag: tag,
+                                    requireInteraction: false,
+                                    silent: false,
+                                    vibrate: [200, 100, 200] // Android震动
+                                };
+                                
+                                // 添加图标（如果支持）
+                                if (icon) {
+                                    options.icon = icon;
+                                    options.badge = icon;
+                                }
+                                
+                                self.registration.showNotification(title, options);
+                            }
+                        });
+                        
+                        // Android: 处理通知点击
+                        self.addEventListener('notificationclick', (event) => {
+                            event.notification.close();
+                            event.waitUntil(
+                                clients.openWindow('/')
+                            );
+                        });
+                    `;
+                    
+                    const blob = new Blob([swCode], { type: 'application/javascript' });
+                    const swUrl = URL.createObjectURL(blob);
+                    
+                    const registration = await navigator.serviceWorker.register(swUrl);
+                    console.log('Service Worker注册成功');
+                    
+                    // 等待Service Worker激活
+                    if (registration.installing) {
+                        await new Promise((resolve) => {
+                            registration.installing.addEventListener('statechange', () => {
+                                if (registration.installing.state === 'activated') {
+                                    resolve();
+                                }
+                            });
+                        });
+                    }
+                    
+                    return registration;
+                } catch (error) {
+                    console.log('Service Worker注册失败:', error);
+                    return null;
+                }
+            }
+            return null;
+        }
 
         async function setupReminders() {
             // 清除现有提醒
@@ -1076,6 +1325,9 @@
                 return;
             }
 
+            // 注册Service Worker
+            await registerServiceWorker();
+
             try {
                 const transaction = db.transaction(['medicines'], 'readonly');
                 const store = transaction.objectStore('medicines');
@@ -1086,12 +1338,15 @@
                     medicines.forEach(medicine => {
                         medicine.reminderTimes.forEach(time => {
                             const [hours, minutes] = time.split(':').map(Number);
+                            
+                            // 立即检查一次（如果时间已到）
+                            checkAndShowReminder(hours, minutes, medicine);
+                            
+                            // 设置定时检查
                             const interval = setInterval(() => {
-                                const now = new Date();
-                                if (now.getHours() === hours && now.getMinutes() === minutes) {
-                                    showReminder(medicine);
-                                }
-                            }, 60000); // 每分钟检查一次
+                                checkAndShowReminder(hours, minutes, medicine);
+                            }, 30000); // 每30秒检查一次，更精确
+                            
                             reminderIntervals.push(interval);
                         });
                     });
@@ -1101,15 +1356,229 @@
             }
         }
 
-        function showReminder(medicine) {
-            if ('Notification' in window && Notification.permission === 'granted') {
-                new Notification(`💊 吃药提醒: ${medicine.name}`, {
-                    body: `该吃 ${medicine.dosage} 了${medicine.notes ? ' (' + medicine.notes + ')' : ''}`,
-                    icon: medicine.photo || undefined,
-                    tag: `medicine-${medicine.id}-${Date.now()}`
-                });
+        function checkAndShowReminder(hours, minutes, medicine) {
+            const now = new Date();
+            const reminderKey = `${medicine.id}-${hours}-${minutes}`;
+            const lastReminderTime = lastReminderTimes[reminderKey];
+            
+            // 检查是否在目标时间范围内（前30秒内）
+            if (now.getHours() === hours && now.getMinutes() === minutes && now.getSeconds() < 30) {
+                // 防止重复提醒：如果上次提醒是在同一分钟内，则不重复提醒
+                if (!lastReminderTime || 
+                    lastReminderTime.getHours() !== hours || 
+                    lastReminderTime.getMinutes() !== minutes) {
+                    lastReminderTimes[reminderKey] = new Date();
+                    showReminder(medicine);
+                }
             }
         }
+
+        function showReminder(medicine) {
+            const reminderText = `💊 吃药提醒: ${medicine.name}`;
+            const reminderBody = `该吃 ${medicine.dosage} 了${medicine.notes ? ' (' + medicine.notes + ')' : ''}`;
+            
+            // 1. 尝试使用Web Notification API
+            if ('Notification' in window) {
+                if (Notification.permission === 'granted') {
+                    // Android和iOS 16.4+：优先使用Service Worker
+                    if ('serviceWorker' in navigator) {
+                        // 等待Service Worker就绪
+                        navigator.serviceWorker.ready.then(registration => {
+                            registration.showNotification(reminderText, {
+                                body: reminderBody,
+                                icon: medicine.photo || undefined,
+                                badge: medicine.photo || undefined,
+                                tag: `medicine-${medicine.id}-${Date.now()}`,
+                                requireInteraction: false,
+                                vibrate: isAndroid ? [200, 100, 200] : undefined, // Android震动
+                                silent: false
+                            });
+                        }).catch(() => {
+                            // Service Worker失败，尝试直接通知
+                            try {
+                                new Notification(reminderText, {
+                                    body: reminderBody,
+                                    icon: medicine.photo || undefined,
+                                    tag: `medicine-${medicine.id}-${Date.now()}`,
+                                    badge: medicine.photo || undefined,
+                                    requireInteraction: false
+                                });
+                            } catch (e) {
+                                console.log('通知显示失败:', e);
+                            }
+                        });
+                    } else {
+                        // 直接显示通知（Android Chrome通常支持）
+                        try {
+                            const notificationOptions = {
+                                body: reminderBody,
+                                tag: `medicine-${medicine.id}-${Date.now()}`,
+                                requireInteraction: false
+                            };
+                            
+                            // 添加图标（如果支持）
+                            if (medicine.photo) {
+                                notificationOptions.icon = medicine.photo;
+                                notificationOptions.badge = medicine.photo;
+                            }
+                            
+                            // Android震动
+                            if (isAndroid) {
+                                notificationOptions.vibrate = [200, 100, 200];
+                            }
+                            
+                            new Notification(reminderText, notificationOptions);
+                        } catch (e) {
+                            console.log('通知显示失败:', e);
+                        }
+                    }
+                }
+            }
+
+            // 2. 如果页面可见，使用页面提醒
+            if (!document.hidden) {
+                // 页面标题闪烁
+                startTitleBlink(reminderText);
+                
+                // 播放提示音（如果允许）
+                playReminderSound();
+                
+                // 显示页面内提醒
+                showPageReminder(medicine);
+            } else {
+                // 页面在后台，保存提醒状态
+                savePendingReminder(medicine);
+            }
+        }
+
+        function startTitleBlink(text) {
+            if (titleBlinkInterval) return; // 已经在闪烁
+            
+            let isBlink = false;
+            titleBlinkInterval = setInterval(() => {
+                document.title = isBlink ? originalTitle : text;
+                isBlink = !isBlink;
+            }, 1000);
+            
+            // 10秒后停止闪烁
+            setTimeout(() => {
+                if (titleBlinkInterval) {
+                    clearInterval(titleBlinkInterval);
+                    titleBlinkInterval = null;
+                    document.title = originalTitle;
+                }
+            }, 10000);
+        }
+
+        function playReminderSound() {
+            try {
+                // 创建音频上下文播放提示音
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const oscillator = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
+                
+                oscillator.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+                
+                oscillator.frequency.value = 800;
+                oscillator.type = 'sine';
+                
+                gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+                
+                oscillator.start(audioContext.currentTime);
+                oscillator.stop(audioContext.currentTime + 0.5);
+            } catch (e) {
+                console.log('播放声音失败:', e);
+            }
+        }
+
+        function showPageReminder(medicine) {
+            // 创建页面内提醒弹窗
+            const reminderDiv = document.createElement('div');
+            reminderDiv.id = 'pageReminder';
+            reminderDiv.style.cssText = `
+                position: fixed;
+                top: 20px;
+                left: 50%;
+                transform: translateX(-50%);
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: white;
+                padding: 20px 30px;
+                border-radius: 15px;
+                box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+                z-index: 10000;
+                text-align: center;
+                max-width: 90%;
+                animation: slideDown 0.3s ease-out;
+            `;
+            
+            reminderDiv.innerHTML = `
+                <h3 style="margin: 0 0 10px 0; font-size: 1.2em;">💊 吃药提醒</h3>
+                <p style="margin: 0 0 10px 0; font-size: 1.1em; font-weight: bold;">${medicine.name}</p>
+                <p style="margin: 0 0 15px 0;">该吃 ${medicine.dosage} 了${medicine.notes ? '<br>' + medicine.notes : ''}</p>
+                <button onclick="this.parentElement.remove()" style="
+                    background: white;
+                    color: #667eea;
+                    border: none;
+                    padding: 10px 20px;
+                    border-radius: 8px;
+                    font-weight: bold;
+                    cursor: pointer;
+                ">知道了</button>
+            `;
+            
+            document.body.appendChild(reminderDiv);
+            
+            // 10秒后自动消失
+            setTimeout(() => {
+                if (reminderDiv.parentElement) {
+                    reminderDiv.remove();
+                }
+            }, 10000);
+        }
+
+        function savePendingReminder(medicine) {
+            // 保存待处理的提醒，当用户打开页面时显示
+            const pendingReminders = JSON.parse(localStorage.getItem('pendingReminders') || '[]');
+            pendingReminders.push({
+                medicine: medicine.name,
+                dosage: medicine.dosage,
+                notes: medicine.notes,
+                timestamp: new Date().toISOString()
+            });
+            localStorage.setItem('pendingReminders', JSON.stringify(pendingReminders));
+        }
+
+        // 检查待处理的提醒
+        function checkPendingReminders() {
+            if (document.hidden) return;
+            
+            const pendingReminders = JSON.parse(localStorage.getItem('pendingReminders') || '[]');
+            if (pendingReminders.length > 0) {
+                pendingReminders.forEach(reminder => {
+                    const medicine = {
+                        name: reminder.medicine,
+                        dosage: reminder.dosage,
+                        notes: reminder.notes
+                    };
+                    showPageReminder(medicine);
+                });
+                localStorage.removeItem('pendingReminders');
+            }
+        }
+
+        // 监听页面可见性变化
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden) {
+                checkPendingReminders();
+                if (titleBlinkInterval) {
+                    clearInterval(titleBlinkInterval);
+                    titleBlinkInterval = null;
+                    document.title = originalTitle;
+                }
+            }
+        });
 
         function toggleNotifications() {
             const enabled = document.getElementById('enableNotifications').checked;
@@ -1186,12 +1655,57 @@
         window.addEventListener('load', async () => {
             await initDB();
             await loadMedicines();
-            await setupReminders();
+            
+            // 检查待处理的提醒
+            checkPendingReminders();
             
             // 检查通知权限
-            if ('Notification' in window && Notification.permission === 'default') {
-                document.getElementById('notificationPermission').style.display = 'block';
+            const notificationsEnabled = await getSetting('notificationsEnabled', false);
+            if (notificationsEnabled) {
+                await setupReminders();
+            } else {
+                if ('Notification' in window) {
+                    if (Notification.permission === 'default') {
+                        const permissionDiv = document.getElementById('notificationPermission');
+                        if (permissionDiv) {
+                            permissionDiv.style.display = 'block';
+                            // 如果是iOS设备，显示特殊提示
+                            if (isIOS) {
+                                const iosHint = document.getElementById('iosHint');
+                                if (iosHint) {
+                                    iosHint.style.display = 'block';
+                                }
+                            } else if (isAndroid) {
+                                // Android设备提示
+                                const iosHint = document.getElementById('iosHint');
+                                if (iosHint) {
+                                    iosHint.innerHTML = '💡 Android提示：Android设备支持完整的后台通知功能，即使应用关闭也能收到提醒。';
+                                    iosHint.style.display = 'block';
+                                }
+                            }
+                        }
+                    } else if (Notification.permission === 'granted') {
+                        // 权限已授予但设置未启用，自动启用
+                        await saveSetting('notificationsEnabled', true);
+                        await setupReminders();
+                    }
+                } else {
+                    // 不支持通知，显示提示
+                    const permissionDiv = document.getElementById('notificationPermission');
+                    if (permissionDiv) {
+                        permissionDiv.innerHTML = '<p><strong>📱 提醒功能</strong></p><p style="font-size: 0.9em; margin-top: 8px;">您的浏览器不支持通知功能。系统将使用页面内提醒和声音提醒。</p>';
+                        permissionDiv.style.display = 'block';
+                    }
+                }
             }
+            
+            // 保存原始标题
+            originalTitle = document.title;
+        });
+
+        // 页面获得焦点时检查提醒
+        window.addEventListener('focus', () => {
+            checkPendingReminders();
         });
     </script>
 </body>
